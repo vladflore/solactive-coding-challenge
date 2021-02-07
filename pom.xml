@@ -15,6 +15,10 @@
 	<description>Demo project for Spring Boot</description>
 	<properties>
 		<java.version>11</java.version>
+		<javamelody-spring-boot-starter.version>1.81.0
+		</javamelody-spring-boot-starter.version>
+		<xstream.version>1.4.10</xstream.version>
+		<jrobin.version>1.5.9</jrobin.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -27,6 +31,23 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<dependency>
+			<groupId>net.bull.javamelody</groupId>
+			<artifactId>javamelody-spring-boot-starter</artifactId>
+			<version>${javamelody-spring-boot-starter.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.thoughtworks.xstream</groupId>
+			<artifactId>xstream</artifactId>
+			<version>${xstream.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.jrobin</groupId>
+			<artifactId>jrobin</artifactId>
+			<version>${jrobin.version}</version>
+		</dependency>
+
 	</dependencies>
 
 	<build>
