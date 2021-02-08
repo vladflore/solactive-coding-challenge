@@ -1,0 +1,30 @@
+package com.example.demo;
+
+import com.example.demo.model.InstrumentTick;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponents;
+import org.springframework.web.util.UriComponentsBuilder;
+
+@RestController
+public class InstrumentTickResource {
+
+	private final InstrumentTickServiceImpl tickServiceImpl;
+
+	public InstrumentTickResource(InstrumentTickServiceImpl tickServiceImpl) {
+		this.tickServiceImpl = tickServiceImpl;
+	}
+
+	@PostMapping("/ticks")
+	public ResponseEntity<Void> ticks(@RequestBody InstrumentTick instrumentTick, UriComponentsBuilder uriComponentsBuilder) {
+		if (tickServiceImpl.isValidInstrumentTick(instrumentTick)) {
+			tickServiceImpl.saveInstrumentTickStats(instrumentTick);
+			UriComponents uriComponents = uriComponentsBuilder.path("/statistics/{instrument_identifier}").buildAndExpand(instrumentTick.getInstrument());
+			return ResponseEntity.created(uriComponents.toUri()).build();
+		}
+		return ResponseEntity.noContent().build();
+	}
+}

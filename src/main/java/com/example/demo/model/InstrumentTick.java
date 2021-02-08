@@ -7,7 +7,7 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class TickData {
+public class InstrumentTick {
 	private String instrument;
 
 	private double price;
