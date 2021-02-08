@@ -1,5 +1,7 @@
 package com.example.demo;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Timestamp;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -41,12 +43,15 @@ public class InstrumentTickServiceImpl implements InstrumentTickService {
 	public void saveInstrumentTickStats(InstrumentTick instrumentTick) {
 		Statistics newStatistic = new Statistics(instrumentTick.getPrice(), instrumentTick.getPrice(), instrumentTick.getPrice(), 1, instrumentTick.getPrice());
 		statsDatabase.merge(instrumentTick.getInstrument(), newStatistic,
-				(oldStats, newStats) -> new Statistics(
-						(oldStats.getTotal() + newStats.getTotal()) / (oldStats.getCount() + newStats.getCount()),
-						Math.max(oldStats.getMax(), newStats.getMax()),
-						Math.min(oldStats.getMin(), newStats.getMin()),
-						oldStats.getCount() + newStats.getCount(),
-						oldStats.getTotal() + newStats.getTotal()));
+				(oldStats, newStats) -> {
+					double avg = round((oldStats.getTotal() + newStats.getTotal()) / (oldStats.getCount() + newStats.getCount()));
+					return new Statistics(
+							avg,
+							Math.max(oldStats.getMax(), newStats.getMax()),
+							Math.min(oldStats.getMin(), newStats.getMin()),
+							oldStats.getCount() + newStats.getCount(),
+							oldStats.getTotal() + newStats.getTotal());
+				});
 	}
 
 	@Override
@@ -59,5 +64,11 @@ public class InstrumentTickServiceImpl implements InstrumentTickService {
 	 */
 	public void cleanDatabase() {
 		statsDatabase.clear();
+	}
+
+	private static double round(double value) {
+		BigDecimal bd = new BigDecimal(Double.toString(value));
+		bd = bd.setScale(2, RoundingMode.HALF_UP);
+		return bd.doubleValue();
 	}
 }

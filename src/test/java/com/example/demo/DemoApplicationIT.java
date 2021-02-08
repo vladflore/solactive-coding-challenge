@@ -3,6 +3,7 @@ package com.example.demo;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -85,7 +86,7 @@ public class DemoApplicationIT {
 
 	@Test
 	@DisplayName("create multiple POSTs simultaneously for the same instrument with valid data and fetch the stats of the instrument")
-	void testConcurrency() throws InterruptedException, TimeoutException, ExecutionException {
+	void testConcurrency_singleInstrument() throws InterruptedException, TimeoutException, ExecutionException {
 		ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 		Set<Callable<HttpStatus>> postCallables = new HashSet<>();
 		int postTasks = 10;
@@ -112,7 +113,95 @@ public class DemoApplicationIT {
 		assertThat(statistics.getMin()).isEqualTo(1);
 		assertThat(statistics.getMax()).isEqualTo(10);
 		assertThat(statistics.getAvg()).isEqualTo(5.5);
+	}
 
+	@Test
+	@DisplayName("POST multiple ticks for multiple instruments with valid data, should compute and fetch stats correctly")
+	void testConcurrency_multipleInstruments() throws InterruptedException, TimeoutException, ExecutionException {
+		ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+		Set<Callable<HttpStatus>> postCallables = new HashSet<>();
+		List<String> instruments = List.of("ABC", "DEF", "GHI");
+		int postTasks = 3;
+		for (String instrument : instruments) {
+			for (int i = 1; i <= postTasks; i++) {
+				int finalI = i;
+				postCallables.add(() -> {
+					InstrumentTick instrumentTick = createInstrumentTick(instrument, finalI, System.currentTimeMillis());
+					return doPostRequest(instrumentTick).getStatusCode();
+				});
+			}
+		}
+		List<Future<HttpStatus>> futures = executorService.invokeAll(postCallables);
+		List<Future<Statistics>> futureStatistics = new ArrayList<>();
+		for (String instrument : instruments) {
+			futureStatistics.add(executorService.submit(() -> doGetRequest(instrument)));
+		}
+		executorService.shutdown();
+		boolean termination = executorService.awaitTermination(1, TimeUnit.SECONDS);
+		assertThat(termination).isTrue();
+
+		for (Future<HttpStatus> httpStatusFuture : futures) {
+			assertThat(httpStatusFuture.get(1, TimeUnit.SECONDS).value()).isEqualTo(HttpStatus.CREATED.value());
+		}
+		for (Future<Statistics> statistics : futureStatistics) {
+			assertThat(statistics.get()).isNotNull();
+			assertThat(statistics.get().getCount()).isEqualTo(3);
+			assertThat(statistics.get().getMin()).isEqualTo(1);
+			assertThat(statistics.get().getMax()).isEqualTo(3);
+			assertThat(statistics.get().getAvg()).isEqualTo(2);
+		}
+	}
+
+	@Test
+	@DisplayName("POST multiple ticks for multiple instruments with invalid data, should compute and fetch stats correctly")
+	void testStatistics_multipleInstruments_withInvalidData() throws InterruptedException, TimeoutException, ExecutionException {
+		ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+		Set<Callable<HttpStatus>> postCallables = new HashSet<>();
+		List<String> instruments = List.of("ABC", "DEF", "GHI");
+		int postTasks = 5;
+		for (String instrument : instruments) {
+			for (int i = 1; i <= postTasks; i++) {
+				int finalI = i;
+				postCallables.add(() -> {
+					long millis = System.currentTimeMillis();
+					// these represent invalid data
+					if (finalI == 3 || finalI == 5) {
+						millis -= 61_000;
+					}
+					InstrumentTick instrumentTick = createInstrumentTick(instrument, finalI, millis);
+					return doPostRequest(instrumentTick).getStatusCode();
+				});
+			}
+		}
+		List<Future<HttpStatus>> futures = executorService.invokeAll(postCallables);
+		List<Future<Statistics>> futureStatistics = new ArrayList<>();
+		for (String instrument : instruments) {
+			futureStatistics.add(executorService.submit(() -> doGetRequest(instrument)));
+		}
+		executorService.shutdown();
+		boolean termination = executorService.awaitTermination(1, TimeUnit.SECONDS);
+		assertThat(termination).isTrue();
+
+		int created = 0;
+		int noContent = 0;
+		for (Future<HttpStatus> future : futures) {
+			if (future.get().value() == HttpStatus.CREATED.value()) {
+				created++;
+			}
+			if (future.get().value() == HttpStatus.NO_CONTENT.value()) {
+				noContent++;
+			}
+		}
+		assertThat(created).isEqualTo(9);
+		assertThat(noContent).isEqualTo(6);
+
+		for (Future<Statistics> statistics : futureStatistics) {
+			assertThat(statistics.get()).isNotNull();
+			assertThat(statistics.get().getCount()).isEqualTo(3);
+			assertThat(statistics.get().getMin()).isEqualTo(1);
+			assertThat(statistics.get().getMax()).isEqualTo(4);
+			assertThat(statistics.get().getAvg()).isEqualTo(2.33);
+		}
 	}
 
 	private ResponseEntity<Void> doPostRequest(InstrumentTick instrumentTick) throws URISyntaxException {
