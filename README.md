@@ -7,7 +7,7 @@ The project is a Spring Boot Application and as such requires at a minimum:
 * Maven (I used version: 3.6.3)
 * Java  (I used version: 11.0.8, AdoptOpenJDK)
 
-**Please make sure that the current git branch is `develop`**:
+**Please make sure that the current git branch is `develop`**
 ```shell
 git checkout develop
 ```
