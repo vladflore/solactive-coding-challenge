@@ -154,7 +154,7 @@ public class DemoApplicationIT {
 
 	@Test
 	@DisplayName("POST multiple ticks for multiple instruments with invalid data, should compute and fetch stats correctly")
-	void testStatistics_multipleInstruments_withInvalidData() throws InterruptedException, TimeoutException, ExecutionException {
+	void testStatistics_multipleInstruments_withInvalidData() throws InterruptedException, ExecutionException {
 		ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 		Set<Callable<HttpStatus>> postCallables = new HashSet<>();
 		List<String> instruments = List.of("ABC", "DEF", "GHI");
@@ -202,6 +202,40 @@ public class DemoApplicationIT {
 			assertThat(statistics.get().getMax()).isEqualTo(4);
 			assertThat(statistics.get().getAvg()).isEqualTo(2.33);
 		}
+	}
+
+	@Test
+	@DisplayName("POST multiple ticks for multiple instruments with valid data, should compute and fetch aggregated stats correctly")
+	void testAggregatedStats() throws InterruptedException, TimeoutException, ExecutionException {
+		ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+		Set<Callable<HttpStatus>> postCallables = new HashSet<>();
+		List<String> instruments = List.of("ABC", "DEF", "GHI");
+		int postTasks = 3;
+		for (String instrument : instruments) {
+			for (int i = 1; i <= postTasks; i++) {
+				int finalI = i;
+				postCallables.add(() -> {
+					InstrumentTick instrumentTick = createInstrumentTick(instrument, finalI, System.currentTimeMillis());
+					return doPostRequest(instrumentTick).getStatusCode();
+				});
+			}
+		}
+		List<Future<HttpStatus>> futures = executorService.invokeAll(postCallables);
+		Future<Statistics> aggregatedStats = executorService.submit(() -> doGetRequest(""));
+
+		executorService.shutdown();
+		boolean termination = executorService.awaitTermination(1, TimeUnit.SECONDS);
+		assertThat(termination).isTrue();
+
+		for (Future<HttpStatus> httpStatusFuture : futures) {
+			assertThat(httpStatusFuture.get(1, TimeUnit.SECONDS).value()).isEqualTo(HttpStatus.CREATED.value());
+		}
+
+		assertThat(aggregatedStats.get()).isNotNull();
+		assertThat(aggregatedStats.get().getCount()).isEqualTo(9);
+		assertThat(aggregatedStats.get().getMin()).isEqualTo(1);
+		assertThat(aggregatedStats.get().getMax()).isEqualTo(3);
+		assertThat(aggregatedStats.get().getAvg()).isEqualTo(2);
 	}
 
 	private ResponseEntity<Void> doPostRequest(InstrumentTick instrumentTick) throws URISyntaxException {

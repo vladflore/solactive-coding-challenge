@@ -35,4 +35,9 @@ public class InstrumentTickResource {
 	public ResponseEntity<Statistics> getStatsForInstrument(@PathVariable("instrument_identifier") String instrumentId) {
 		return ResponseEntity.ok(tickServiceImpl.getInstrumentStats(instrumentId));
 	}
+
+	@GetMapping("/statistics")
+	public ResponseEntity<Statistics> getAggregatedStats() {
+		return ResponseEntity.ok(tickServiceImpl.getAggregatedStats());
+	}
 }

@@ -27,4 +27,10 @@ public interface InstrumentTickService {
 	 * @return the instrument's {@link Statistics} data
 	 */
 	Statistics getInstrumentStats(String instrument);
+
+	/**
+	 * This method retrieves the aggregated stats for all ticks across all instruments.
+	 * @return the aggregated {@link Statistics} data
+	 */
+	Statistics getAggregatedStats();
 }
