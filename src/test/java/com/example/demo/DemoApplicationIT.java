@@ -3,9 +3,20 @@ package com.example.demo;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.sql.Timestamp;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import com.example.demo.model.InstrumentTick;
 import com.example.demo.model.Statistics;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -31,43 +42,89 @@ public class DemoApplicationIT {
 	@Autowired
 	private TestRestTemplate restTemplate;
 
-	@Test
-	@DisplayName("when two valid instrument ticks are POSTed (successively), then the instrument stats are fetched (GET) and calculated correctly")
-	void whenValidTicksAreCreatedForAnInstrument_thenStatsAreCorrectlyFetchedAndComputed() throws URISyntaxException {
-		HttpHeaders headers = createHeaders();
-		InstrumentTick instrumentTick = createInstrumentTick("IBM.N", 100, System.currentTimeMillis());
-		HttpEntity<InstrumentTick> httpEntity = createHttpEntity(headers, instrumentTick);
-		URI uriPost = createUri("http", "localhost", port, "ticks");
-		ResponseEntity<Void> response = restTemplate.postForEntity(uriPost, httpEntity, Void.class);
+	@Autowired
+	private InstrumentTickService instrumentTickService;
 
+	@BeforeEach
+	void cleanUp() {
+		((InstrumentTickServiceImpl) instrumentTickService).cleanDatabase();
+	}
+
+	@Test
+	@DisplayName("when two valid instrument ticks are POSTed (successively), then the instrument stats are calculated correctly and fetched")
+	void whenValidTicksAreCreatedForAnInstrument_thenStatsAreCorrectlyComputedAndFetched() throws URISyntaxException {
+		InstrumentTick instrumentTick = createInstrumentTick("IBM.N", 100, System.currentTimeMillis());
+
+		ResponseEntity<Void> response = doPostRequest(instrumentTick);
 		URI location = response.getHeaders().getLocation();
 		assertThat(location).isNotNull();
 		assertThat(location.toString()).contains("/statistics/" + instrumentTick.getInstrument());
 		assertThat(response.getStatusCodeValue()).isEqualTo(HttpStatus.CREATED.value());
 
-		URI uriGet = createUri("http", "localhost", port, "statistics/" + instrumentTick.getInstrument());
-		Statistics statistics = restTemplate.getForObject(uriGet, Statistics.class);
+		Statistics statistics = doGetRequest(instrumentTick.getInstrument());
 		assertThat(statistics).isNotNull();
-		assertThat(statistics.getAvg()).isEqualTo(instrumentTick.getPrice());
 		assertThat(statistics.getCount()).isEqualTo(1);
 		assertThat(statistics.getMin()).isEqualTo(instrumentTick.getPrice());
 		assertThat(statistics.getMax()).isEqualTo(instrumentTick.getPrice());
+		assertThat(statistics.getAvg()).isEqualTo(instrumentTick.getPrice());
 
 		instrumentTick = createInstrumentTick("IBM.N", 200, System.currentTimeMillis());
-		httpEntity = createHttpEntity(headers, instrumentTick);
-		response = restTemplate.postForEntity(uriPost, httpEntity, Void.class);
-
+		response = doPostRequest(instrumentTick);
 		location = response.getHeaders().getLocation();
 		assertThat(location).isNotNull();
 		assertThat(location.toString()).contains("/statistics/" + instrumentTick.getInstrument());
 		assertThat(response.getStatusCodeValue()).isEqualTo(HttpStatus.CREATED.value());
 
-		statistics = restTemplate.getForObject(uriGet, Statistics.class);
+		statistics = doGetRequest(instrumentTick.getInstrument());
 		assertThat(statistics).isNotNull();
-		assertThat(statistics.getAvg()).isEqualTo(150);
 		assertThat(statistics.getCount()).isEqualTo(2);
 		assertThat(statistics.getMin()).isEqualTo(100);
 		assertThat(statistics.getMax()).isEqualTo(200);
+		assertThat(statistics.getAvg()).isEqualTo(150);
+	}
+
+	@Test
+	@DisplayName("create multiple POSTs simultaneously for the same instrument with valid data and fetch the stats of the instrument")
+	void testConcurrency() throws InterruptedException, TimeoutException, ExecutionException {
+		ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+		Set<Callable<HttpStatus>> postCallables = new HashSet<>();
+		int postTasks = 10;
+		for (int i = 1; i <= postTasks; i++) {
+			int finalI = i;
+			postCallables.add(() -> {
+				InstrumentTick instrumentTick = createInstrumentTick("IBM.N", finalI, System.currentTimeMillis());
+				return doPostRequest(instrumentTick).getStatusCode();
+			});
+		}
+		List<Future<HttpStatus>> futures = executorService.invokeAll(postCallables);
+		Future<Statistics> statisticsFuture = executorService.submit(() -> doGetRequest("IBM.N"));
+
+		executorService.shutdown();
+		boolean termination = executorService.awaitTermination(1, TimeUnit.SECONDS);
+		assertThat(termination).isTrue();
+
+		for (Future<HttpStatus> httpStatusFuture : futures) {
+			assertThat(httpStatusFuture.get(1, TimeUnit.SECONDS).value()).isEqualTo(HttpStatus.CREATED.value());
+		}
+		Statistics statistics = statisticsFuture.get(1, TimeUnit.SECONDS);
+		assertThat(statistics).isNotNull();
+		assertThat(statistics.getCount()).isEqualTo(10);
+		assertThat(statistics.getMin()).isEqualTo(1);
+		assertThat(statistics.getMax()).isEqualTo(10);
+		assertThat(statistics.getAvg()).isEqualTo(5.5);
+
+	}
+
+	private ResponseEntity<Void> doPostRequest(InstrumentTick instrumentTick) throws URISyntaxException {
+		HttpHeaders headers = createHeaders();
+		HttpEntity<InstrumentTick> httpEntity = createHttpEntity(headers, instrumentTick);
+		URI uriPost = createUri("http", "localhost", port, "ticks");
+		return restTemplate.postForEntity(uriPost, httpEntity, Void.class);
+	}
+
+	private Statistics doGetRequest(String instrument) throws URISyntaxException {
+		URI uriGet = createUri("http", "localhost", port, "statistics/" + instrument);
+		return restTemplate.getForObject(uriGet, Statistics.class);
 	}
 
 	private URI createUri(String protocol, String host, int port, String endpoint) throws URISyntaxException {
