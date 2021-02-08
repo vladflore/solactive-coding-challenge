@@ -46,7 +46,7 @@ public class InstrumentTickServiceImpl implements InstrumentTickService {
 	}
 
 	@Override
-	public Statistics getInstrumentStats(String instrument) {
-		return statsDatabase.getOrDefault(instrument, ZERO_STATS);
+	public Statistics getInstrumentStats(String instrumentId) {
+		return statsDatabase.getOrDefault(instrumentId, ZERO_STATS);
 	}
 }

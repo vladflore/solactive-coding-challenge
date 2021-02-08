@@ -25,9 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 public class DemoApplicationIT {
 
-	@Autowired
-	private InstrumentTickService instrumentTickService;
-
 	@LocalServerPort
 	private int port;
 
@@ -40,7 +37,9 @@ public class DemoApplicationIT {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 
-		InstrumentTick instrumentTick = new InstrumentTick("IBM.N", 100, new Timestamp(System.currentTimeMillis()));
+		String instrumentId = "IBM.N";
+
+		InstrumentTick instrumentTick = new InstrumentTick(instrumentId, 100, new Timestamp(System.currentTimeMillis()));
 		HttpEntity<InstrumentTick> httpEntity = new HttpEntity<>(instrumentTick, headers);
 
 		URI uri = new URI("http://localhost:" + port + "/ticks");
@@ -52,14 +51,15 @@ public class DemoApplicationIT {
 		assertThat(location.toString()).contains("/statistics/" + instrumentTick.getInstrument());
 		assertThat(response.getStatusCodeValue()).isEqualTo(HttpStatus.CREATED.value());
 
-		Statistics tickStats = instrumentTickService.getInstrumentStats(instrumentTick.getInstrument());
-		assertThat(tickStats).isNotNull();
-		assertThat(tickStats.getAvg()).isEqualTo(instrumentTick.getPrice());
-		assertThat(tickStats.getCount()).isEqualTo(1);
-		assertThat(tickStats.getMin()).isEqualTo(instrumentTick.getPrice());
-		assertThat(tickStats.getMax()).isEqualTo(instrumentTick.getPrice());
+		Statistics statistics = restTemplate.getForObject(URI.create("http://localhost:" + port + "/statistics/" + instrumentId), Statistics.class);
 
-		instrumentTick = new InstrumentTick("IBM.N", 200, new Timestamp(System.currentTimeMillis()));
+		assertThat(statistics).isNotNull();
+		assertThat(statistics.getAvg()).isEqualTo(instrumentTick.getPrice());
+		assertThat(statistics.getCount()).isEqualTo(1);
+		assertThat(statistics.getMin()).isEqualTo(instrumentTick.getPrice());
+		assertThat(statistics.getMax()).isEqualTo(instrumentTick.getPrice());
+
+		instrumentTick = new InstrumentTick(instrumentId, 200, new Timestamp(System.currentTimeMillis()));
 		httpEntity = new HttpEntity<>(instrumentTick, headers);
 
 		response = restTemplate.postForEntity(uri, httpEntity, Void.class);
@@ -69,11 +69,12 @@ public class DemoApplicationIT {
 		assertThat(location.toString()).contains("/statistics/" + instrumentTick.getInstrument());
 		assertThat(response.getStatusCodeValue()).isEqualTo(HttpStatus.CREATED.value());
 
-		tickStats = instrumentTickService.getInstrumentStats(instrumentTick.getInstrument());
-		assertThat(tickStats).isNotNull();
-		assertThat(tickStats.getAvg()).isEqualTo(150);
-		assertThat(tickStats.getCount()).isEqualTo(2);
-		assertThat(tickStats.getMin()).isEqualTo(100);
-		assertThat(tickStats.getMax()).isEqualTo(200);
+		statistics = restTemplate.getForObject(URI.create("http://localhost:" + port + "/statistics/" + instrumentId), Statistics.class);
+
+		assertThat(statistics).isNotNull();
+		assertThat(statistics.getAvg()).isEqualTo(150);
+		assertThat(statistics.getCount()).isEqualTo(2);
+		assertThat(statistics.getMin()).isEqualTo(100);
+		assertThat(statistics.getMax()).isEqualTo(200);
 	}
 }
