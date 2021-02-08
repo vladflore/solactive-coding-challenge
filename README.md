@@ -51,7 +51,7 @@ behaviour_ (see point 4 below).
 1. Add (more) data validation
 2. Unit Tests for saveInstrumentTickStats and generally more testing
 3. Resource slice test
-4. because I do not keep a list of ticks, rather I compute the stats on the fly, as they
+4. Because I do not keep a list of ticks, rather I compute the stats on the fly, as they
    come in, if the last tick came more than 60 seconds ago, that tick should not be part
    of the statistics data anymore (for a specific instrument or for the aggregated stats)
    => bug ?! :(
@@ -61,4 +61,4 @@ behaviour_ (see point 4 below).
 
 ### Did I like it?
 
-It was more challenging than I expected, but I enjoyed all those 8 hours I spent on it! :)
+It was more challenging than I expected, but I enjoyed all those 8+ hours I spent on it! :)
